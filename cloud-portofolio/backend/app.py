@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app)  # Biar bisa diakses dari domain frontend Netlify
 
 # Koneksi ke PostgreSQL Railway
-DATABASE_URL = os.environ.get('DATABASE_URL') or "postgresql://postgres:password@host:port/dbname"
+DATABASE_URL = os.environ.get('postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway') or "postgresql://postgres:password@host:port/dbname"
 
 try:
     conn = psycopg2.connect(DATABASE_URL)
@@ -43,9 +43,6 @@ def contact():
 
 @app.route("/messages", methods=["GET"])
 def get_messages():
-    if not conn:
-        return jsonify({"error": "DB connection error"}), 500
-
     try:
         cur = conn.cursor()
         cur.execute("SELECT email, message, created_at FROM messages ORDER BY created_at DESC")
@@ -57,7 +54,4 @@ def get_messages():
         ])
     except Exception as e:
         print("❌ Error fetch:", e)
-        return jsonify({"error": "Gagal mengambil pesan"}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+        return jsonify({"error": str(e)}), 500
