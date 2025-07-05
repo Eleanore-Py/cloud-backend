@@ -4,10 +4,10 @@ import psycopg2
 import os
 
 app = Flask(__name__)
-CORS(app)  # Biar bisa diakses dari domain frontend Netlify
+CORS(app)
 
-# Koneksi ke PostgreSQL Railway
-DATABASE_URL = os.environ.get('postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway') or "postgresql://postgres:password@host:port/dbname"
+# FIXED: gunakan default jika env kosong
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway")
 
 try:
     conn = psycopg2.connect(DATABASE_URL)
@@ -32,7 +32,14 @@ def contact():
 
     try:
         cur = conn.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, email TEXT, message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                email TEXT,
+                message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
         cur.execute("INSERT INTO messages (email, message) VALUES (%s, %s)", (email, message))
         conn.commit()
         cur.close()
@@ -55,3 +62,6 @@ def get_messages():
     except Exception as e:
         print("❌ Error fetch:", e)
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
