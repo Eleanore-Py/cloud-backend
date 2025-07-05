@@ -4,60 +4,60 @@ import psycopg2
 import os
 
 app = Flask(__name__)
-CORS(app)  # Aktifkan CORS biar frontend Netlify bisa akses backend ini
+CORS(app)  # Biar bisa diakses dari domain frontend Netlify
 
-# URL DB dari Railway
-DATABASE_URL = "postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@postgres.railway.internal:5432/railway"
+# Koneksi ke PostgreSQL Railway
+DATABASE_URL = os.environ.get('DATABASE_URL') or "postgresql://postgres:password@host:port/dbname"
 
-# Fungsi konek DB
-def get_db_connection():
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except Exception as e:
-        print(f"[ERROR] Gagal konek DB: {e}")
-        return None
+try:
+    conn = psycopg2.connect(DATABASE_URL)
+except Exception as e:
+    print("❌ Gagal konek DB:", e)
+    conn = None
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
     return jsonify({"message": "🔥 Backend Flask is running!"})
 
-# Endpoint POST buat form
 @app.route("/contact", methods=["POST"])
 def contact():
+    if not conn:
+        return jsonify({"error": "DB connection error"}), 500
+
     email = request.form.get("email")
     message = request.form.get("message")
 
     if not email or not message:
         return jsonify({"error": "Email dan pesan wajib diisi"}), 400
 
-    conn = get_db_connection()
-    if conn is None:
-        return jsonify({"error": "Gagal konek ke database"}), 500
+    try:
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, email TEXT, message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);")
+        cur.execute("INSERT INTO messages (email, message) VALUES (%s, %s)", (email, message))
+        conn.commit()
+        cur.close()
+        return jsonify({"success": True, "message": "Pesan berhasil dikirim!"})
+    except Exception as e:
+        print("❌ Error insert:", e)
+        return jsonify({"error": "Gagal menyimpan pesan"}), 500
+
+@app.route("/messages", methods=["GET"])
+def get_messages():
+    if not conn:
+        return jsonify({"error": "DB connection error"}), 500
 
     try:
-        with conn.cursor() as cur:
-            # Buat tabel kalau belum ada
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id SERIAL PRIMARY KEY,
-                    email TEXT NOT NULL,
-                    message TEXT NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-            """)
-            conn.commit()
-
-            # Simpan data
-            cur.execute("INSERT INTO messages (email, message) VALUES (%s, %s);", (email, message))
-            conn.commit()
-
-        return jsonify({"success": True, "message": "Pesan berhasil disimpan!"}), 200
-
+        cur = conn.cursor()
+        cur.execute("SELECT email, message, created_at FROM messages ORDER BY created_at DESC")
+        rows = cur.fetchall()
+        cur.close()
+        return jsonify([
+            {"email": row[0], "message": row[1], "created_at": row[2].isoformat()}
+            for row in rows
+        ])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("❌ Error fetch:", e)
+        return jsonify({"error": "Gagal mengambil pesan"}), 500
 
-    finally:
-        conn.close()
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
