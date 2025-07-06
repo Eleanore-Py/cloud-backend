@@ -105,6 +105,7 @@ def upload_file():
                     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            conn.commit()
             cur.execute(
                 "INSERT INTO uploads (filename, filesize, mimetype) VALUES (%s, %s, %s)",
                 (file.filename, os.path.getsize(file_path), file.mimetype)
@@ -120,9 +121,15 @@ def upload_file():
 @app.route("/files", methods=["GET"])
 def list_files():
     try:
-        files = os.listdir(app.config['UPLOAD_FOLDER'])
-        valid_files = [f for f in files if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], f))]
-        return jsonify(valid_files)
+        if not conn or conn.closed > 0:
+            reconnect()
+        cur = conn.cursor()
+        cur.execute("SELECT filename, filesize, mimetype, uploaded_at FROM uploads ORDER BY uploaded_at DESC")
+        rows = cur.fetchall()
+        cur.close()
+        return jsonify([
+            {"filename": row[0], "filesize": row[1], "mimetype": row[2], "uploaded_at": row[3].isoformat()} for row in rows
+        ])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
