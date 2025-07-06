@@ -33,23 +33,23 @@ def contact():
         if not conn:
             return jsonify({"error": "DB connection error"}), 500
 
-    name = request.form.get("name")
+    email = request.form.get("email")
     message = request.form.get("message")
 
-    if not name or not message:
-        return jsonify({"error": "Nama dan pesan wajib diisi"}), 400
+    if not email or not message:
+        return jsonify({"error": "Email dan pesan wajib diisi"}), 400
 
     try:
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id SERIAL PRIMARY KEY,
-                name TEXT,
+                email TEXT,
                 message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        cur.execute("INSERT INTO messages (name, message) VALUES (%s, %s)", (name, message))
+        cur.execute("INSERT INTO messages (email, message) VALUES (%s, %s)", (email, message))
         conn.commit()
         cur.close()
         return jsonify({"success": True, "message": "Pesan berhasil dikirim!"})
@@ -67,11 +67,11 @@ def get_messages():
 
     try:
         cur = conn.cursor()
-        cur.execute("SELECT name, message, created_at FROM messages ORDER BY created_at DESC")
+        cur.execute("SELECT email, message, created_at FROM messages ORDER BY created_at DESC")
         rows = cur.fetchall()
         cur.close()
         return jsonify([
-            {"name": row[0], "message": row[1], "created_at": row[2].isoformat()} for row in rows
+            {"email": row[0], "message": row[1], "created_at": row[2].isoformat()} for row in rows
         ])
     except Exception as e:
         conn.rollback()
@@ -135,14 +135,9 @@ def list_files():
         """)
         conn.commit()
 
-        search = request.args.get("search", "").strip().lower()
-        if search:
-            cur.execute("""
-                SELECT filename, filesize, mimetype, uploaded_at 
-                FROM uploads 
-                WHERE LOWER(filename) LIKE %s
-                ORDER BY uploaded_at DESC
-            """, (f"%{search}%",))
+        query = request.args.get("search", "").strip().lower()
+        if query:
+            cur.execute("SELECT filename, filesize, mimetype, uploaded_at FROM uploads WHERE LOWER(filename) LIKE %s ORDER BY uploaded_at DESC", (f"%{query}%",))
         else:
             cur.execute("SELECT filename, filesize, mimetype, uploaded_at FROM uploads ORDER BY uploaded_at DESC")
 
