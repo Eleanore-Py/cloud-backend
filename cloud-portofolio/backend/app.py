@@ -156,6 +156,26 @@ def download_file(filename):
     except Exception as e:
         return jsonify({"error": str(e)}), 404
 
+@app.route("/delete/<filename>", methods=["DELETE"])
+def delete_file(filename):
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        if not conn or conn.closed > 0:
+            reconnect()
+
+        cur = conn.cursor()
+        cur.execute("DELETE FROM uploads WHERE filename = %s", (filename,))
+        conn.commit()
+        cur.close()
+
+        return jsonify({"message": f"{filename} berhasil dihapus."})
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/admin/drop-uploads", methods=["GET"])
 def drop_uploads_table():
     if not conn or conn.closed > 0:
