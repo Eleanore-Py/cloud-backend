@@ -1,17 +1,17 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import psycopg2
 import os
 
-# === Konfigurasi ===
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 app = Flask(__name__)
 CORS(app)
+
+# === Konfigurasi Upload ===
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# === Koneksi DB ===
+# === Koneksi ke PostgreSQL ===
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway")
 
 try:
@@ -21,7 +21,6 @@ except Exception as e:
     conn = None
 
 # === Routes ===
-
 @app.route("/")
 def home():
     return jsonify({"message": "🔥 Backend Flask is running!"})
@@ -105,6 +104,20 @@ def upload_file():
         print("❌ Error upload:", e)
         return jsonify({"error": "Gagal menyimpan metadata file"}), 500
 
-# === Start App ===
+@app.route("/download/<filename>", methods=["GET"])
+def download_file(filename):
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    except FileNotFoundError:
+        return jsonify({"error": "File tidak ditemukan"}), 404
+
+@app.route("/files", methods=["GET"])
+def list_files():
+    try:
+        files = os.listdir(app.config['UPLOAD_FOLDER'])
+        return jsonify(files)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
