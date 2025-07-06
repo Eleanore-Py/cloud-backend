@@ -10,14 +10,17 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Gunakan variabel env atau fallback default
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway")
 
-try:
-    conn = psycopg2.connect(DATABASE_URL)
-except Exception as e:
-    print("❌ Gagal konek DB:", e)
-    conn = None
+def reconnect():
+    global conn
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+    except Exception as e:
+        print("❌ Gagal konek DB:", e)
+        conn = None
+
+reconnect()
 
 @app.route("/")
 def home():
@@ -25,8 +28,10 @@ def home():
 
 @app.route("/contact", methods=["POST"])
 def contact():
-    if not conn:
-        return jsonify({"error": "DB connection error"}), 500
+    if not conn or conn.closed > 0:
+        reconnect()
+        if not conn:
+            return jsonify({"error": "DB connection error"}), 500
 
     email = request.form.get("email")
     message = request.form.get("message")
@@ -49,21 +54,27 @@ def contact():
         cur.close()
         return jsonify({"success": True, "message": "Pesan berhasil dikirim!"})
     except Exception as e:
+        conn.rollback()
         print("❌ Error insert:", e)
         return jsonify({"error": "Gagal menyimpan pesan"}), 500
 
 @app.route("/messages", methods=["GET"])
 def get_messages():
+    if not conn or conn.closed > 0:
+        reconnect()
+        if not conn:
+            return jsonify({"error": "DB connection error"}), 500
+
     try:
         cur = conn.cursor()
         cur.execute("SELECT email, message, created_at FROM messages ORDER BY created_at DESC")
         rows = cur.fetchall()
         cur.close()
         return jsonify([
-            {"email": row[0], "message": row[1], "created_at": row[2].isoformat()}
-            for row in rows
+            {"email": row[0], "message": row[1], "created_at": row[2].isoformat()} for row in rows
         ])
     except Exception as e:
+        conn.rollback()
         print("❌ Error fetch:", e)
         return jsonify({"error": str(e)}), 500
 
@@ -79,6 +90,9 @@ def upload_file():
     try:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
+
+        if not conn or conn.closed > 0:
+            reconnect()
 
         if conn:
             cur = conn.cursor()
@@ -100,19 +114,14 @@ def upload_file():
 
         return jsonify({"success": True, "message": "File uploaded & saved!"})
     except Exception as e:
+        if conn: conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/files", methods=["GET"])
 def list_files():
     try:
         files = os.listdir(app.config['UPLOAD_FOLDER'])
-        valid_files = []
-
-        for f in files:
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], f)
-            if os.path.isfile(file_path):
-                valid_files.append(f)
-
+        valid_files = [f for f in files if os.path.isfile(os.path.join(app.config['UPLOAD_FOLDER'], f))]
         return jsonify(valid_files)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
