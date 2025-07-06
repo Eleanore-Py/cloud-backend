@@ -123,14 +123,34 @@ def list_files():
     try:
         if not conn or conn.closed > 0:
             reconnect()
+        else:
+            conn.rollback()  # ← penting! reset error state kalau ada error sebelumnya
+
         cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS uploads (
+                id SERIAL PRIMARY KEY,
+                filename TEXT,
+                filesize BIGINT,
+                mimetype TEXT,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+
         cur.execute("SELECT filename, filesize, mimetype, uploaded_at FROM uploads ORDER BY uploaded_at DESC")
         rows = cur.fetchall()
         cur.close()
         return jsonify([
-            {"filename": row[0], "filesize": row[1], "mimetype": row[2], "uploaded_at": row[3].isoformat()} for row in rows
+            {
+                "filename": row[0],
+                "filesize": row[1],
+                "mimetype": row[2],
+                "uploaded_at": row[3].isoformat()
+            } for row in rows
         ])
     except Exception as e:
+        if conn: conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/download/<filename>", methods=["GET"])
