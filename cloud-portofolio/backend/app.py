@@ -115,9 +115,13 @@ def download_file(filename):
 def list_files():
     try:
         files = os.listdir(app.config['UPLOAD_FOLDER'])
-        return jsonify(files)
+        valid_files = []
+
+        for f in files:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], f)
+            if os.path.isfile(file_path):
+                valid_files.append(f)
+
+        return jsonify(valid_files)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
