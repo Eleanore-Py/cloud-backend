@@ -159,19 +159,6 @@ def download_file(filename):
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
     except Exception as e:
         return jsonify({"error": str(e)}), 404
-@app.route("/admin/drop-uploads", methods=["GET"])
-def drop_uploads_table():
-    if not conn or conn.closed > 0:
-        reconnect()
-
-    try:
-        cur = conn.cursor()
-        cur.execute("DROP TABLE IF EXISTS uploads;")
-        conn.commit()
-        cur.close()
-        return jsonify({"message": "✅ Table 'uploads' berhasil di-drop."})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
