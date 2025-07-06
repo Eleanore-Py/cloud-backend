@@ -6,12 +6,11 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# === Konfigurasi Upload ===
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# === Koneksi ke PostgreSQL ===
+# Gunakan variabel env atau fallback default
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:zWbDFtVGonwIOAcCbyZZoYccNPGTFjRz@shortline.proxy.rlwy.net:46773/railway")
 
 try:
@@ -20,7 +19,6 @@ except Exception as e:
     print("❌ Gagal konek DB:", e)
     conn = None
 
-# === Routes ===
 @app.route("/")
 def home():
     return jsonify({"message": "🔥 Backend Flask is running!"})
@@ -71,45 +69,19 @@ def get_messages():
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    if not conn:
-        return jsonify({"error": "DB connection error"}), 500
-
-    if 'file' not in request.files or 'email' not in request.form:
-        return jsonify({"error": "File dan email wajib dikirim"}), 400
-
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
     file = request.files['file']
-    email = request.form.get('email')
-
     if file.filename == '':
-        return jsonify({"error": "Nama file tidak valid"}), 400
-
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filepath)
+        return jsonify({"error": "No selected file"}), 400
 
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS uploads (
-                id SERIAL PRIMARY KEY,
-                email TEXT,
-                filename TEXT,
-                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        cur.execute("INSERT INTO uploads (email, filename) VALUES (%s, %s)", (email, file.filename))
-        conn.commit()
-        cur.close()
-        return jsonify({"success": True, "message": f"File '{file.filename}' berhasil di-upload oleh {email}."})
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(file_path)
+        return jsonify({"success": True, "message": "File uploaded!"})
     except Exception as e:
-        print("❌ Error upload:", e)
-        return jsonify({"error": "Gagal menyimpan metadata file"}), 500
-
-@app.route("/download/<filename>", methods=["GET"])
-def download_file(filename):
-    try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
-    except FileNotFoundError:
-        return jsonify({"error": "File tidak ditemukan"}), 404
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/files", methods=["GET"])
 def list_files():
@@ -125,3 +97,13 @@ def list_files():
         return jsonify(valid_files)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/download/<filename>", methods=["GET"])
+def download_file(filename):
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
