@@ -100,7 +100,7 @@ def upload_file():
                 CREATE TABLE IF NOT EXISTS uploads (
                     id SERIAL PRIMARY KEY,
                     filename TEXT,
-                    filesize INTEGER,
+                    filesize BIGINT,
                     mimetype TEXT,
                     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
