@@ -71,7 +71,7 @@ def get_messages():
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
@@ -79,7 +79,26 @@ def upload_file():
     try:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
-        return jsonify({"success": True, "message": "File uploaded!"})
+
+        if conn:
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS uploads (
+                    id SERIAL PRIMARY KEY,
+                    filename TEXT,
+                    filesize INTEGER,
+                    mimetype TEXT,
+                    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute(
+                "INSERT INTO uploads (filename, filesize, mimetype) VALUES (%s, %s, %s)",
+                (file.filename, os.path.getsize(file_path), file.mimetype)
+            )
+            conn.commit()
+            cur.close()
+
+        return jsonify({"success": True, "message": "File uploaded & saved!"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
